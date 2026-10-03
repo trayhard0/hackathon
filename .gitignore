@@ -38,3 +38,6 @@ token*.json
 credentials.json
 
 target/
+
+
+.venv/

@@ -1,0 +1,2 @@
+POST http://localhost:8080/api/gmail/preview?max=10
+Accept: application/json
