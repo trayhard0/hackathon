@@ -39,5 +39,6 @@ credentials.json
 
 target/
 
-
 .venv/
+
+labeled_emails.csv

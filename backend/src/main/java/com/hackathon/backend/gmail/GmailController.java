@@ -3,7 +3,9 @@ package com.hackathon.backend.gmail;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/gmail")
@@ -38,4 +40,43 @@ public class GmailController {
         return out;
     }
 
+    @PostMapping("/apply")
+    public ApplyResult apply(@RequestBody ApplyRequest request) {
+        Map<String, List<String>> byLabel = new HashMap<>();
+        List<String> failures = new ArrayList<>();
+        for (ApplyItem item : request.items()) {
+            if (item.messageId() == null || item.label() == null) {
+                failures.add("missing messageId/label");
+                continue;
+            }
+            byLabel.computeIfAbsent(item.label().toLowerCase(), k -> new ArrayList<>())
+                    .add(item.messageId());
+        }
+        try {
+            return new ApplyResult(gmailService.applyLabels(byLabel), failures);
+        } catch (Exception e) {
+            failures.add("gmail error: " + e.getMessage());
+            return new ApplyResult(Map.of(), failures);
+        }
+    }
+
+    @GetMapping(value = "/export", produces = "text/csv")
+    public String export(@RequestParam(defaultValue = "400") int max) throws Exception {
+        StringBuilder sb = new StringBuilder("id,sender,subject,snippet,predicted_label,label\n");
+        for (EmailDto email : gmailService.fetchRecentEmails(max)) {
+            String predicted = classifyClient.classify(
+                    email.from(), email.subject(), email.snippet()).label();
+            sb.append(csv(email.id())).append(',')
+                    .append(csv(email.from())).append(',')
+                    .append(csv(email.subject())).append(',')
+                    .append(csv(email.snippet())).append(',')
+                    .append(csv(predicted)).append(',').append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String csv(String s) {
+        if (s == null) return "";
+        return "\"" + s.replace("\"", "\"\"").replaceAll("[\\r\\n]+", " ") + "\"";
+    }
 }

@@ -12,16 +12,13 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
-import com.google.api.services.gmail.model.ListMessagesResponse;
-import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.*;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
-import java.util.Collections;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
 
 @Service
 public class GmailService {
@@ -95,5 +92,42 @@ public class GmailService {
         }
         return result;
     }
+
+    private static final Map<String, String> LABEL_NAMES = Map.of(
+            "applied", "JobSearch/Applied",
+            "assessment", "JobSearch/Assessment",
+            "interview", "JobSearch/Interview",
+            "rejection", "JobSearch/Rejection",
+            "recruiter", "JobSearch/Recruiter"
+    );
+
+    public Map<String, Integer> applyLabels(Map<String, List<String>> messageIdsByLabel) throws Exception {
+        Gmail gmail = getGmail();
+        ListLabelsResponse listResp = gmail.users().labels().list("me").execute();
+        Map<String, String> nameToId = new HashMap<>();
+        for (Label l : listResp.getLabels()) nameToId.put(l.getName(), l.getId());
+
+        Map<String, Integer> applied = new HashMap<>();
+        for (var entry : messageIdsByLabel.entrySet()) {
+            String gmailName = LABEL_NAMES.get(entry.getKey().toLowerCase());
+            if (gmailName == null) continue; // "other" gets no label
+            String labelId = nameToId.get(gmailName);
+            if (labelId == null) {
+                Label created = gmail.users().labels().create("me",
+                        new Label().setName(gmailName)
+                                .setLabelListVisibility("labelShow")
+                                .setMessageListVisibility("show")).execute();
+                labelId = created.getId();
+                nameToId.put(gmailName, labelId);
+            }
+            gmail.users().messages().batchModify("me",
+                    new BatchModifyMessagesRequest()
+                            .setIds(entry.getValue())
+                            .setAddLabelIds(List.of(labelId))).execute();
+            applied.put(entry.getKey(), entry.getValue().size());
+        }
+        return applied;
+    }
+
 
 }
