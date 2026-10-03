@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+import os
 
 app = FastAPI()
+
+try:
+    import joblib
+    HAVE_JOBLIB = True
+except ImportError:
+    HAVE_JOBLIB = False
+
+pipe = None
+if HAVE_JOBLIB and os.path.exists("model/pipeline.joblib"):
+    pipe = joblib.load("model/pipeline.joblib")
 
 class ClassifyRequest(BaseModel):
     subject: str
@@ -11,20 +22,36 @@ class ClassifyRequest(BaseModel):
 class ClassifyResponse(BaseModel):
     label: str
     confidence: float
+    source: str
+
+def rule_label(text: str) -> str:
+    t = text.lower()
+    if any(k in t for k in ["interview", "onsite", "phone screen"]):
+        return "interview"
+    if any(k in t for k in ["assessment", "codesignal", "hackerrank", "online assessment"]):
+        return "assessment"
+    if any(k in t for k in ["rejected", "not moving forward", "not move forward", "unfortunately"]):
+        return "rejection"
+    if any(k in t for k in ["recruiter", "reaching out", "talent acquisition"]):
+        return "recruiter"
+    if any(k in t for k in ["application received", "thank you for applying",
+                            "successfully received your application", "thank you for your interest"]):
+        return "applied"
+    return "other"
 
 @app.post("/classify", response_model=ClassifyResponse)
 def classify(req: ClassifyRequest):
-    # Stub: keyword rules until the trained model lands.
-    # Labels: applied, assessment, interview, rejection, recruiter, other
-    text = (req.subject + " " + req.snippet).lower()
-    if any(k in text for k in ["interview", "onsite", "phone screen"]):
-        return ClassifyResponse(label="interview", confidence=0.5)
-    if any(k in text for k in ["assessment", "codesignal", "hackerrank", "online assessment"]):
-        return ClassifyResponse(label="assessment", confidence=0.5)
-    if any(k in text for k in ["rejected", "not moving forward", "unfortunately"]):
-        return ClassifyResponse(label="rejection", confidence=0.5)
-    if any(k in text for k in ["recruiter", "reaching out", "talent acquisition"]):
-        return ClassifyResponse(label="recruiter", confidence=0.5)
-    if any(k in text for k in ["application received", "thank you for applying", "applied"]):
-        return ClassifyResponse(label="applied", confidence=0.5)
-    return ClassifyResponse(label="other", confidence=0.5)
+    text = f"{req.sender} {req.subject} {req.snippet}"
+    if pipe is not None:
+        pred = pipe.predict([text])[0]
+        conf = float(max(pipe.predict_proba([text])[0]))
+        if pred == "other":
+            return ClassifyResponse(label="other", confidence=conf, source="model")
+        sub = rule_label(text)
+        return ClassifyResponse(label=sub if sub != "other" else "applied",
+                                confidence=conf, source="model+rules")
+    return ClassifyResponse(label=rule_label(text), confidence=0.5, source="rules")
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "modelLoaded": pipe is not None}
