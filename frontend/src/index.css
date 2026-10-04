@@ -1161,3 +1161,25 @@ body {
   color: var(--green);
   font-weight: 600;
 }
+
+/* ---------- Hero action buttons (stacked) ---------- */
+
+.hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.organize-msg {
+  margin: 0;
+  text-align: center;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 680px) {
+  .hero-actions {
+    width: 100%;
+  }
+}

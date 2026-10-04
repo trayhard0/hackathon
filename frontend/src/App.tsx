@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchApplications, syncApplications, type BackendApp } from "./api";
+import { fetchApplications, syncApplications, applyAllLabels, type BackendApp } from "./api";
 
 type Job = {
   id: string;
@@ -625,6 +625,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [organizing, setOrganizing] = useState(false);
+  const [organizeMsg, setOrganizeMsg] = useState<string | null>(null);
   const [route, setRoute] = useState<Route>({ name: "home" });
 
   const load = async () => {
@@ -654,6 +656,21 @@ export default function App() {
       setSyncing(false);
     }
   };
+
+  const handleOrganize = async () => {
+    setOrganizing(true);
+    setOrganizeMsg(null);
+    try {
+      const counts = await applyAllLabels();
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      setOrganizeMsg(`Labeled ${total} emails in Gmail ✓`);
+    } catch {
+      setOrganizeMsg("Couldn't reach Gmail — is the backend up?");
+    } finally {
+      setOrganizing(false);
+    }
+  };
+
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -725,9 +742,15 @@ export default function App() {
               <em>One step at a time.</em>
             </div>
           </div>
-          <button className="plant-button" type="button" onClick={handleSync} disabled={syncing}>
-            <span>＋</span> {syncing ? "Syncing…" : "Sync Gmail"}
-          </button>
+          <div className="hero-actions">
+            <button className="plant-button" type="button" onClick={handleOrganize} disabled={organizing}>
+              <span>✦</span> {organizing ? "Organizing…" : "Organize Gmail"}
+            </button>
+            <button className="plant-button" type="button" onClick={handleSync} disabled={syncing}>
+              <span>＋</span> {syncing ? "Syncing…" : "Sync Gmail"}
+            </button>
+            {organizeMsg && <p className="organize-msg">{organizeMsg}</p>}
+          </div>
         </section>
 
         <section className="applications">
