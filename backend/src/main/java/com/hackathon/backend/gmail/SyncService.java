@@ -45,7 +45,6 @@ public class SyncService {
     private static final Set<String> VALID_LABELS =
             Set.of("applied", "assessment", "interview", "rejection", "recruiter", "other");
 
-    @Transactional
     public SyncResult sync(int max) {
         final List<EmailDto> emails;
         try {
@@ -67,31 +66,72 @@ public class SyncService {
 
                 ClassificationResult cr = classifyClient.classify(dto.from(), dto.subject(), dto.snippet());
 
+                String label = cr.label();
                 String company = extractCompany(dto.subject(), dto.from());
                 String role = extractRole(dto.subject());
+                String source = cr.source();
+                String classificationText = dto.snippet();
+                if (!"other".equals(label)) {
+                    // Job-related: fetch full body so the LLM sees past the snippet
+                    try {
+                        classificationText = gmailService.fetchFullBody(dto.id());
+                    } catch (Exception e) {
+                        log.warn("Full body fetch failed for {}, falling back to snippet", dto.id());
+                    }
+                    ClassifyClient.UnderstandResult u = classifyClient.understand(dto.from(), dto.subject(), classificationText);
+                    if ("ollama".equals(u.source())) {
+                        label = u.phase();
+                        if (!"Unknown".equals(u.company())) company = u.company();
+                        if (!"Unknown".equals(u.role())) role = u.role();
+                        source = "ollama";
+                    } else if (!"other".equals(u.phase())) {
+                        label = u.phase();  // Python rules fallback phase; keep regex company/role
+                        source = u.source();
+                    }
+                }
 
                 EmailRecord rec = new EmailRecord();
                 rec.setGmailMessageId(dto.id());
                 rec.setSender(dto.from());
                 rec.setSubject(dto.subject());
-                rec.setSnippet(dto.snippet());
+                rec.setSnippet(classificationText);
                 rec.setDate(parseDate(dto.date()));
-                rec.setPredictedLabel(cr.label());
+                rec.setPredictedLabel(label);
                 rec.setConfidence(cr.confidence());
-                rec.setSource(cr.source());
+                rec.setSource(source);
 
-                if ("other".equals(cr.label())) {
+
+                if ("other".equals(label)) {
                     emailRecordRepository.save(rec); // standalone — never becomes a dashboard entry
                     added++;
                     continue;
                 }
 
+                String groupCompany = company;
+                String groupRole = role;
+                if (!"applied".equals(label)) {
+                    // Follow-up email (assessment/interview/rejection/recruiter): attach to the
+                    // existing application for this company, preferring the base "applied" row,
+                    // instead of fragmenting on the LLM's inconsistent role extraction
+                    var matches = applicationRepository.findByCompanyIgnoreCase(company);
+                    var best = matches.stream()
+                            .filter(a -> "applied".equals(a.getStatus()))
+                            .findFirst()
+                            .orElse(matches.stream().findFirst().orElse(null));
+                    if (best != null) {
+                        groupCompany = best.getCompany();
+                        groupRole = best.getRole();
+                    }
+                }
                 Optional<Application> existing =
-                        applicationRepository.findByCompanyIgnoreCaseAndRoleIgnoreCase(company, role);
+                        applicationRepository.findByCompanyIgnoreCaseAndRoleIgnoreCase(groupCompany, groupRole);
+                String finalCompany = groupCompany;
+                String finalRole = groupRole;
+
                 Application app = existing.orElseGet(() -> {
                     Application a = new Application();
-                    a.setCompany(company);
-                    a.setRole(role);
+                    a.setCompany(finalCompany);
+                    a.setRole(finalRole);
                     a.setStatus(cr.label()); // placeholder; recomputed below
                     return a;
                 });
@@ -117,9 +157,21 @@ public class SyncService {
 
         for (Application app : touched) {
             recomputeStatus(app);
+            applicationRepository.save(app);
         }
 
         return new SyncResult(emails.size(), added, newApps, updatedApps);
+    }
+
+    public Map<String, Integer> applyLabelsToAll() throws Exception {
+        Map<String, List<String>> byLabel = new HashMap<>();
+        for (EmailRecord rec : emailRecordRepository.findAll()) {
+            String label = rec.getCorrectedLabel() != null ? rec.getCorrectedLabel() : rec.getPredictedLabel();
+            if (label == null || "other".equals(label)) continue;
+            byLabel.computeIfAbsent(label.toLowerCase(), k -> new ArrayList<>())
+                    .add(rec.getGmailMessageId());
+        }
+        return gmailService.applyLabels(byLabel);
     }
 
     /** Furthest stage reached wins; any rejection is terminal. */

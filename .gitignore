@@ -45,3 +45,5 @@ labeled_emails.csv
 
 dist/
 *.mv.db
+
+data/

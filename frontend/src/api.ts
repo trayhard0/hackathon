@@ -56,6 +56,14 @@ export async function syncApplications(max = 200): Promise<{ added: number }> {
   return r.json();
 }
 
+/** Apply JobSearch/* Gmail labels to all classified emails. Returns counts per label. */
+export async function applyAllLabels(): Promise<Record<string, number>> {
+  const r = await fetch("/api/gmail/apply-all", { method: "POST" });
+  if (!r.ok) throw new Error(`apply-all: ${r.status}`);
+  return r.json();
+}
+
+
 /**
  * Correct one email's label. messageId is the Gmail hex message id
  * (from BackendEmail.gmailMessageId), NOT the numeric application id.

@@ -13,15 +13,20 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
 public class GmailService {
+
+    private static final Logger log = LoggerFactory.getLogger(GmailService.class);
 
     private static final String APPLICATION_NAME = "Hackathon Gmail Organizer";
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
@@ -93,6 +98,48 @@ public class GmailService {
         return result;
     }
 
+    /**
+     * Fetches full body text for a single email.
+     * Called only for job-related emails — keeps Gmail API quota usage low.
+     */
+    public String fetchFullBody(String messageId) throws Exception {
+        Message full = getGmail().users().messages().get("me", messageId)
+                .setFormat("full")
+                .execute();
+        return extractBodyText(full.getPayload());
+    }
+
+    /**
+     * Extracts readable text from the MIME payload for classification.
+     * Prefers text/plain; falls back to text/html with tags stripped.
+     * Truncated to ~1500 chars — enough to see past the polite opening line.
+     */
+    private String extractBodyText(MessagePart payload) {
+        StringBuilder sb = new StringBuilder();
+        collectTextByMime(payload, sb, "text/plain");
+        if (sb.length() == 0) {
+            StringBuilder htmlSb = new StringBuilder();
+            collectTextByMime(payload, htmlSb, "text/html");
+            sb.append(htmlSb.toString().replaceAll("<[^>]+>", " "));
+        }
+        String text = sb.toString().replaceAll("\\s+", " ").trim();
+        text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&#39;", "'");
+        return text.length() > 1500 ? text.substring(0, 1500) : text;
+    }
+
+    private void collectTextByMime(MessagePart part, StringBuilder sb, String targetMime) {
+        if (part == null) return;
+        if (targetMime.equalsIgnoreCase(part.getMimeType())
+                && part.getBody() != null && part.getBody().getData() != null) {
+            byte[] decoded = Base64.getUrlDecoder().decode(part.getBody().getData());
+            sb.append(new String(decoded, StandardCharsets.UTF_8)).append(" ");
+        }
+        if (part.getParts() != null) {
+            for (MessagePart p : part.getParts()) collectTextByMime(p, sb, targetMime);
+        }
+    }
+
     private static final Map<String, String> LABEL_NAMES = Map.of(
             "applied", "JobSearch/Applied",
             "assessment", "JobSearch/Assessment",
@@ -128,6 +175,4 @@ public class GmailService {
         }
         return applied;
     }
-
-
 }

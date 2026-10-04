@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import os
+import json
+import urllib.request
+
 
 app = FastAPI()
 
@@ -59,3 +62,75 @@ def classify(req: ClassifyRequest):
 @app.get("/health")
 def health():
     return {"status": "ok", "modelLoaded": pipe is not None}
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "qwen2.5:3b"
+VALID_PHASES = {"applied", "assessment", "interview", "rejection", "recruiter", "other"}
+
+UNDERSTAND_SYSTEM = """You analyze job-application emails. Read the sender, subject, and snippet, then decide:
+- phase: exactly one of "applied", "assessment", "interview", "rejection", "recruiter", "other"
+- company: the employer company name (not the job board or sender domain), or "Unknown"
+- role: the job title as a clean title (e.g. "Software Engineer Intern"), or "Unknown"
+
+Phase meanings:
+- applied: confirms an application was received or submitted
+- assessment: online assessment / coding challenge invite, reminder, or expiry (CodeSignal, HackerRank, etc.)
+- interview: interview invitation or scheduling
+- rejection: the candidate will not move forward
+- recruiter: a recruiter reaching out about a role (not an application confirmation)
+- other: not a job-application email
+
+Examples — follow these exactly:
+
+Sender: Duolingo Careers <careers@duolingo.com>
+Subject: An update on your application
+Snippet: Thank you for your interest in Duolingo. After careful consideration, we have decided not to move forward with your candidacy at this time.
+{"phase": "rejection", "company": "Duolingo", "role": "Software Engineer Intern"}
+
+Sender: Company Careers <noreply@ashbyhq.com>
+Subject: Your application to Superhuman
+Snippet: Unfortunately, we won't be able to move forward. We appreciate your interest in the Software Engineering Intern role and wish you luck.
+{"phase": "rejection", "company": "Superhuman", "role": "Software Engineering Intern"}
+
+Sender: Gilead Sciences Talent <talent@gilead.com>
+Subject: Your application has been received
+Snippet: Thank you for applying to the Intern - Development position. Your application is under review. Next steps may include an online assessment or interview.
+{"phase": "applied", "company": "Gilead Sciences", "role": "Intern - Development"}
+
+Sender: CodeSignal <notifications@codesignal.com>
+Subject: Action required: Complete your Ramp assessment
+Snippet: Ramp has invited you to take the Frontend Challenge on CodeSignal. You have 7 days to complete it. Click here to start.
+{"phase": "assessment", "company": "Ramp", "role": "Unknown"}
+
+Respond with ONLY a JSON object like {"phase": "applied", "company": "Amgen", "role": "Software Engineer Intern"}. No other text.
+If the email confirms your application was received, it is "applied" — even if it mentions assessments or interviews as possible future steps. Only use "assessment" if the email explicitly asks you to complete a test now.
+"""
+
+def ollama_understand(sender: str, subject: str, snippet: str) -> dict:
+    prompt = f"{UNDERSTAND_SYSTEM}\n\nSender: {sender}\nSubject: {subject}\nSnippet: {snippet}"
+    body = json.dumps({
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "format": "json",          # Ollama guarantees valid JSON back
+        "stream": False,
+        "options": {"temperature": 0, "num_predict": 100, "num_ctx": 2048},
+    }).encode()
+    req = urllib.request.Request(OLLAMA_URL, data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        outer = json.loads(resp.read().decode())
+    data = json.loads(outer["response"])
+    phase = str(data.get("phase", "other")).strip().lower()
+    if phase not in VALID_PHASES:
+        phase = "other"
+    company = str(data.get("company", "Unknown")).strip() or "Unknown"
+    role = str(data.get("role", "Unknown")).strip() or "Unknown"
+    return {"phase": phase, "company": company, "role": role, "source": "ollama"}
+
+@app.post("/understand")
+def understand(req: ClassifyRequest):
+    try:
+        return ollama_understand(req.sender, req.subject, req.snippet)
+    except Exception:
+        text = f"{req.sender} {req.subject} {req.snippet}"
+        return {"phase": rule_label(text),
+                "company": "Unknown", "role": "Unknown", "source": "rules-fallback"}

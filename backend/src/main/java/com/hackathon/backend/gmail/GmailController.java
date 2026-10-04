@@ -89,4 +89,10 @@ public class GmailController {
         return syncService.correct(req.messageId(), req.label());
     }
 
+    @PostMapping("/apply-all")
+    public Map<String, Integer> applyAll() throws Exception {
+        return syncService.applyLabelsToAll();
+    }
+
+
 }

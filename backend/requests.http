@@ -34,3 +34,8 @@ Content-Type: application/json
 ###
 GET http://localhost:8080/api/applications/stats/funnel
 
+###
+POST http://localhost:8000/understand
+Content-Type: application/json
+
+{"sender": "Ramp Talent Team <no-reply@ashbyhq.com>", "subject": "Ramp | Confirmation on your Application + CodeSignal", "snippet": "Hi Abdelrahman, Thank you for taking the time to apply to our Software Engineer opening at Ramp! Your application has been received and will be reviewed as soon as you complete the CodeSignal"}
