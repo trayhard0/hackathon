@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.cache/
+.env*
+.vite/
+*.tsbuildinfo
+*-debug.log*
+logs/
+*.log

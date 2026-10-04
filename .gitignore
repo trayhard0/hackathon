@@ -38,3 +38,10 @@ token*.json
 credentials.json
 
 target/
+
+.venv/
+
+labeled_emails.csv
+
+dist/
+*.mv.db
