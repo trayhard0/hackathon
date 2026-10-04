@@ -640,7 +640,7 @@ export default function App() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await syncApplications(200);
+      await syncApplications(50);
       await load();
     } catch {
       setLoadError(true);
@@ -723,7 +723,7 @@ export default function App() {
         <div className="content">
           <section className="hero">
             <div className="hero-copy">
-              <div className="overline">YOUR CAREER, CULTIVATED&nbsp; / &nbsp;OCTOBER 3, 2026</div>
+                <div className="overline">YOUR CAREER, CULTIVATED&nbsp; / &nbsp;{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}</div>
               <div className="hero-title">Good things take root.</div>
               <div className="hero-stats">
                 <span>{growing} applications growing</span>
