@@ -1,2 +1,36 @@
-POST http://localhost:8080/api/gmail/preview?max=10
+POST http://localhost:8080/api/applications/sync?max=200
 Accept: application/json
+
+###
+GET http://localhost:8080/api/applications
+Accept: application/json
+
+###
+GET http://localhost:8080/api/applications/stats/funnel
+Accept: application/json
+
+###
+GET http://localhost:8080/api/applications/7
+Accept: application/json
+
+###
+POST http://localhost:8000/classify
+Content-Type: application/json
+{
+  "sender": "Ramp Talent Team <no-reply@ashbyhq.com>",
+  "subject": "Update on your application to Ramp",
+  "snippet": "PASTE_SNIPPET_HERE"
+}
+
+###
+POST http://localhost:8080/api/gmail/correct
+Content-Type: application/json
+
+{
+"messageId": "1a0eeaeb48f2e290",
+"label": "rejection"
+}
+
+###
+GET http://localhost:8080/api/applications/stats/funnel
+

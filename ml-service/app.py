@@ -26,16 +26,20 @@ class ClassifyResponse(BaseModel):
 
 def rule_label(text: str) -> str:
     t = text.lower()
+    if any(k in t for k in ["rejected", "not selected", "not move forward",
+                            "not moving forward", "n't move forward",
+                            "not be moving forward", "moving forward with other",
+                            "pursue other", "unfortunately"]):
+        return "rejection"
     if any(k in t for k in ["interview", "onsite", "phone screen"]):
         return "interview"
     if any(k in t for k in ["assessment", "codesignal", "hackerrank", "online assessment"]):
         return "assessment"
-    if any(k in t for k in ["rejected", "not moving forward", "not move forward", "unfortunately"]):
-        return "rejection"
-    if any(k in t for k in ["recruiter", "reaching out", "talent acquisition"]):
+    if any(k in t for k in ["recruiter", "reaching out"]):
         return "recruiter"
     if any(k in t for k in ["application received", "thank you for applying",
-                            "successfully received your application", "thank you for your interest"]):
+                            "successfully received your application",
+                            "thank you for your interest", "thanks for applying"]):
         return "applied"
     return "other"
 

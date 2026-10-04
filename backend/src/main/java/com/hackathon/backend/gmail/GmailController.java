@@ -13,10 +13,12 @@ public class GmailController {
 
     private final GmailService gmailService;
     private final ClassifyClient classifyClient;
+    private final SyncService syncService;
 
-    public GmailController(GmailService gmailService, ClassifyClient classifyClient) {
+    public GmailController(GmailService gmailService, ClassifyClient classifyClient, SyncService syncService) {
         this.gmailService = gmailService;
         this.classifyClient = classifyClient;
+        this.syncService = syncService;
     }
 
     @GetMapping("/latest")
@@ -79,4 +81,12 @@ public class GmailController {
         if (s == null) return "";
         return "\"" + s.replace("\"", "\"\"").replaceAll("[\\r\\n]+", " ") + "\"";
     }
+
+    public record CorrectRequest(String messageId, String label) {}
+
+    @PostMapping("/correct")
+    public SyncService.CorrectResult correct(@RequestBody CorrectRequest req) {
+        return syncService.correct(req.messageId(), req.label());
+    }
+
 }

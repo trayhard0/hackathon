@@ -14,10 +14,10 @@ public class ClassifyClient {
             ClassificationResult res = rest.postForObject(
                     CLASSIFY_URL, new ClassifyRequest(sender, subject, snippet),
                     ClassificationResult.class);
-            return res != null ? res : new ClassificationResult("other", 0.0);
+            return res != null ? res : new ClassificationResult("other", 0.0, "rules");
         } catch (Exception e) {
             // FastAPI down? Degrade gracefully instead of crashing the request.
-            return new ClassificationResult("other", 0.0);
+            return new ClassificationResult("other", 0.0, "rules");
         }
     }
 }
