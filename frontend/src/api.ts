@@ -70,8 +70,8 @@ export async function applyAllLabels(): Promise<Record<string, number>> {
  * label: "applied" | "assessment" | "interview" | "rejection" | "recruiter" | "other"
  */
 export async function correctEmail(
-  messageId: string,
-  label: string
+    messageId: string,
+    label: string
 ): Promise<{ messageId: string; effectiveLabel: string; applicationId: number }> {
   const r = await fetch("/api/gmail/correct", {
     method: "POST",
@@ -79,6 +79,23 @@ export async function correctEmail(
     body: JSON.stringify({ messageId, label }),
   });
   if (!r.ok) throw new Error(`correct: ${r.status}`);
+  return r.json();
+}
+
+/**
+ * Update an application's company and/or role. Persists to the backend.
+ * Used by the Edit modal so corrections survive a page refresh.
+ */
+export async function updateApplication(
+    id: number,
+    fields: { company?: string; role?: string }
+): Promise<BackendApp> {
+  const r = await fetch(`/api/applications/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  if (!r.ok) throw new Error(`update: ${r.status}`);
   return r.json();
 }
 

@@ -55,4 +55,19 @@ public class ApplicationController {
         return applicationRepository.findAll().stream()
                 .collect(Collectors.groupingBy(Application::getStatus, Collectors.counting()));
     }
+
+    @PatchMapping("/{id}")
+    @Transactional
+    public ApplicationDto update(@PathVariable Long id, @RequestBody Map<String, String> fields) {
+        var app = applicationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Unknown application: " + id));
+        if (fields.containsKey("company")) app.setCompany(fields.get("company"));
+        if (fields.containsKey("role")) app.setRole(fields.get("role"));
+        var saved = applicationRepository.save(app);
+        return new ApplicationDto(
+                saved.getId(), saved.getCompany(), saved.getRole(), saved.getStatus(),
+                saved.getLastActivity(), saved.getEmails().size(),
+                saved.getEmails().isEmpty() ? null : saved.getEmails().get(0).getSubject());
+    }
 }
