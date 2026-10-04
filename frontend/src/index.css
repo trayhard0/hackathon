@@ -338,13 +338,17 @@ body {
 .forest-grid {
   min-height: 222px;
   padding: 10px 16px 0;
-  display: grid;
-  grid-template-columns: repeat(9, minmax(90px, 1fr));
+  display: flex;
+  flex-direction: row;
   align-items: end;
-  gap: 3px;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .plant-item {
+  flex-shrink: 0;
+  width: 96px;
   padding-bottom: 17px;
   text-align: center;
 }
